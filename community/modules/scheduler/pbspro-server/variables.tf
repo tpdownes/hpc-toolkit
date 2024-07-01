@@ -121,7 +121,7 @@ variable "instance_image" {
     EOD
   type        = map(string)
   default = {
-    family  = "hpc-centos-7"
+    family  = "hpc-rocky-linux-8"
     project = "cloud-hpc-image-public"
   }
 
