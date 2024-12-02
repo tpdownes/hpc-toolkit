@@ -29,13 +29,6 @@ vars:
     family: slurm-a3high
   slurm_cluster_name: slurm0
   a3_partition_name: a3high
-  a3_static_cluster_size: 32
-  # a3_reservation_name must be specified; if Google staff have provided you
-  # with a reservation name, use it. Otherwise supply user-created reservation.
-  a3_reservation_name: a3-reservation-0
-  # a3_maintenance_interval should be empty string by default; if Google staff
-  # have created a reservation, they will also provide a3_maintenance_interval
-  a3_maintenance_interval: ""
   # enable Google Cloud Ops Agent logging and monitoring
   enable_ops_agent: true
   # enable the NVIDIA DCGM daemon and integration into Cloud Ops Agent
