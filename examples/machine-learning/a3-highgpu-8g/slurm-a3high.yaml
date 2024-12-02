@@ -151,7 +151,7 @@ deployment_groups:
               enable_nvidia_dcgm: false
               nvidia_packages:
               - cuda-toolkit-12-4
-              - nvidia-dkms-550-open
+              - nvidia-dkms-550-server-open
               - datacenter-gpu-manager
               - libnvidia-nscq-550
             tasks:
