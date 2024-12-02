@@ -246,13 +246,6 @@ deployment_groups:
           # resolution failures during google-startup-scripts.service)
           systemctl daemon-reload
           systemctl enable delay-a3.service
-      - type: data
-        destination: /etc/enroot/enroot.conf
-        content: |
-          ENROOT_RUNTIME_PATH    /mnt/localssd/${UID}/enroot/runtime
-          ENROOT_CACHE_PATH      /mnt/localssd/${UID}/enroot/cache
-          ENROOT_DATA_PATH       /mnt/localssd/${UID}/enroot/data
-          ENROOT_TEMP_PATH       /mnt/localssd/${UID}/enroot
       - type: shell
         destination: install_mdadm.sh
         content: |
@@ -360,6 +353,13 @@ deployment_groups:
             "data-root": "$(vars.localssd_mountpoint)/docker"
           }
       runners:
+      - type: data
+        destination: /etc/enroot/enroot.conf
+        content: |
+          ENROOT_RUNTIME_PATH    $(vars.localssd_mountpoint)/${UID}/enroot/runtime
+          ENROOT_CACHE_PATH      $(vars.localssd_mountpoint)/${UID}/enroot/cache
+          ENROOT_DATA_PATH       $(vars.localssd_mountpoint)/${UID}/enroot/data
+          ENROOT_TEMP_PATH       $(vars.localssd_mountpoint)/${UID}/enroot
       - type: ansible-local
         destination: enable_nvidia_dcgm.yml
         content: |
@@ -454,13 +454,6 @@ deployment_groups:
           mkdir -p /opt/apps/adm/slurm/partition-$(vars.a3_partition_name)-epilog_slurmd.d
           ln -s /opt/apps/adm/slurm/scripts/receive-data-path-manager /opt/apps/adm/slurm/partition-$(vars.a3_partition_name)-prolog_slurmd.d/start-rxdm.prolog_slurmd
           ln -s /opt/apps/adm/slurm/scripts/receive-data-path-manager /opt/apps/adm/slurm/partition-$(vars.a3_partition_name)-epilog_slurmd.d/stop-rxdm.epilog_slurmd
-      - type: shell
-        destination: reset_enroot.sh
-        content: |
-          #!/bin/bash
-          # reset enroot to defaults of files under /home and running under /run
-          # allows basic enroot testing on login/controller nodes (reduced I/O)
-          rm -f /etc/enroot/enroot.conf
 
   - id: slurm_login
     source: community/modules/scheduler/schedmd-slurm-gcp-v6-login
@@ -493,8 +486,3 @@ deployment_groups:
       enable_controller_public_ips: true
       enable_external_prolog_epilog: true
       controller_startup_script: $(controller_startup.startup_script)
-      login_startup_script: |
-        #!/bin/bash
-        # reset enroot to defaults of files under /home and running under /run
-        # allows basic enroot testing on login node (reduced I/O)
-        rm -f /etc/enroot/enroot.conf
