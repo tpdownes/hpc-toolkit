@@ -3,34 +3,9 @@
 This document will guide you to successfully provisioning a Slurm cluster with
 a3-highgpu-8g compute nodes running NVIDIA H100 GPUs.
 
-## Before starting
+## Upgrading from solutions prior to Toolkit release v1.43.0
 
-> [!IMPORTANT]
-> Before beginning, submit a request to your Google Cloud representative for
-> access to the Deep Learning VM Image for a3-highgpu-8g. It is currently
-> available only by Private Preview request. This image contains patches that
-> significantly enhance the network performance of workloads that span multiple
-> a3-highgpu-8g VMs. You will use the image ID in the steps shown below.
-
-## Upgrading from the v5 "legacy" solution to v6
-There is no direct path for upgrading the Slurm-GCP v5 solution in-place to v6.
-The recommended path requires temporarily bringing down your v5 cluster and
-replacing it with the v6 solution described in this document.
-
-> [!NOTE]
-> The `ml-slurm-a3-0-base.yaml` blueprint is identical for the "legacy" v5 and
-> v6 solutions. If you are upgrading from v5 to v6, do not destroy the v5 base
-> blueprint or re-deploy the v6 base blueprint. Simply copy the Filestore IP
-> address as instructed below.
-
-We recommend using `gcluster destroy` to destroy the deployments provisioned by the
-v5 legacy blueprints:
-
-- [Legacy v5 image building blueprint](v5-legacy/ml-slurm-a3-1-image-v5-legacy.yaml)
-- [Legacy v5 cluster provisioning blueprint](v5-legacy/ml-slurm-a3-2-cluster-v5-legacy.yaml)
-
-Then follow the instructions below while skipping the re-deployment of the base
-blueprint.
+SHOW ALTERNATIVE GROUP 0
 
 ## Required setup
 
@@ -39,27 +14,11 @@ Please follow the initial instructions for:
 - Installing Cluster Toolkit [dependencies][tkdeps] (Go, Terraform, Packer)
 - Installing the Cluster [Toolkit][tkinstall]
 
-Verify that your release of the Cluster Toolkit is 1.37.0 or later.
+Verify that your release of the Cluster Toolkit is 1.43.0 or later.
 
 ```shell
 gcluster --version
 ```
-
-## Top-Level Design of Solution
-
-The solution is split into 3 Cluster Toolkit blueprints:
-
-1. Provision 1 system network and 1 Filestore instance for mounting `/home`
-across the cluster.
-2. Build a custom image installing Slurm in an Ubuntu 20.04 image. The image
-runs a kernel patched with performance enhancements for the a3-highgpu-8g VM.
-3. Provision 4 GPU networks and a Slurm cluster using the custom image.
-
-The 1st and 2nd blueprints should be provisioned once and rarely need further
-modification. This approach separates the lifecycle of a Filestore instance from
-the lifecycle of the cluster, allowing the cluster to be deleted while retaining
-access to data and home directories. The 3rd cluster blueprint may be more
-frequently updated and re-provisioned as discussed below.
 
 ## First time considerations
 
@@ -92,65 +51,11 @@ gcloud storage buckets create gs://${BUCKET} --project=${PROJECT_ID} \
 gcloud storage buckets update gs://${BUCKET} --versioning
 ```
 
-Modify all 3 blueprints to configure the new bucket to serve as a Terraform
-remote backend:
-
-```yaml
-terraform_backend_defaults:
-  type: gcs
-  configuration:
-    bucket: customer-bucket # modify to bucket created above
-```
-
-### Set default values
-
-Modify the the deployment variables `project_id`, `region`, `zone`, in the
-`vars` block of all 3 blueprints:
-
-```yaml
-  project_id: customer-project
-  region: customer-region
-  zone: customer-zone
-```
-
-### Set kernel-patched OS image
-
-Obtain values for `source_image_project_id` and `source_image` from your Google
-Cloud representative. Set them at approximately lines 33 and 34 of
-`ml-slurm-a3-1-image.yaml`.
-
-```yaml
-  source_image_project_id: source-image-project-id # use value supplied by Google Cloud staff
-  source_image: source-image-name                  # use value supplied by Google Cloud staff
-```
-
-### Reservation created by Google
-
 > [!IMPORTANT]
-> If you have ***not*** received a VM reservation from Google Cloud staff, then
-> skip this step and proceed to [manual reservation creation](#manual-creation-of-reservation).
-
-Set the deployment variable `a3_reservation_name` at approximately line 38 of
-`ml-slurm-a3-2-cluster.yaml` to the reservation name provided by Google. The
-value for `a3_maintenance_interval` should also be set as directed by Google
-staff. A common setting is `PERIODIC`, shown below, but this value must be
-confirmed with Google staff.
-
-```yaml
-  # a3_reservation_name must be specified; if Google staff have provided you
-  # with a reservation name, use it. Otherwise supply user-created reservation.
-  a3_reservation_name: reservation-name-provided-by-google
-  # a3_maintenance_interval should be empty string by default; if Google staff
-  # have created a reservation, they will also provide a3_maintenance_interval
-  a3_maintenance_interval: PERIODIC
-```
+> If you have received a VM reservation from Google Cloud staff, then
+> skip this step and proceed to [Modify deployment settings](#modify-deployment-settings).
 
 ### Manual creation of reservation
-
-> [!IMPORTANT]
-> If you received a VM reservation from Google Cloud staff, then skip this step
-> after confirming that you followed the instructions in [reservation created by
-> Google](#reservation-created-by-google).
 
 We recommend creating a reservation to ensure reliable access to re-create VMs
 if you need to redeploy or otherwise maintain your cluster.
@@ -164,6 +69,39 @@ gcloud compute reservations create a3-reservation-0 \
     --require-specific-reservation \
     --log-http
 ```
+
+### Modify deployment settings
+
+#### Terraform backend
+
+```yaml
+terraform_backend_defaults:
+  type: gcs
+  configuration:
+    bucket: customer-bucket # modify to bucket created above
+```
+
+### Basic properties
+
+Modify the the deployment variables `project_id`, `region`, `zone`, in the
+`vars` block of `slurm-a3high-deployment.yaml`:
+
+```yaml
+  project_id: customer-project
+  region: customer-region
+  zone: customer-zone
+```
+
+### Cluster scale
+
+At approximately line 37 of `ml-slurm-a3-2-cluster.yaml`, set the static cluster
+size. Recall that there are 8 NVIDIA H100 GPUs per a3-highgpu-8g VM.
+
+```yaml
+  a3_static_cluster_size: 32
+```
+
+#### Reservation
 
 This reservation be must be specified when creating VMs with matching parameters
 (e.g. a3-highgpu-8g VM in configured zone). If you executed the command above
@@ -181,78 +119,13 @@ blueprint matches the name of the user-created reservation.
   a3_maintenance_interval: ""
 ```
 
-### Set cluster size
-
-At approximately line 37 of `ml-slurm-a3-2-cluster.yaml`, set the static cluster
-size. Recall that there are 8 NVIDIA H100 GPUs per a3-highgpu-8g VM.
-
-```yaml
-  a3_static_cluster_size: 32
-```
-
 ## Cluster creation
 
-> [!NOTE]
-> The `ml-slurm-a3-0-base.yaml` blueprint is identical for the "legacy" v5 and
-> v6 solutions. If you are upgrading from v5 to v6, do not destroy the v5 base
-> blueprint or re-deploy the v6 base blueprint. Simply copy the Filestore IP
-> address as instructed below.
-
-The blueprint `ml-slurm-a3-0-base.yaml` will create 1 system network and a
-Filestore `/home` filesystem. Run the standard Toolkit workflow at the command
-line (approx. 5 minutes):
+Once the deployment file has been modified, the cluster can be provisioned with
+a single command:
 
 ```shell
-gcluster deploy ml-slurm-a3-0-base.yaml --auto-approve
-```
-
-Several values will be output to the screen. The output will be similar to:
-
-```hcl
-network_name_sysnet = "sys-net"
-network_storage_homefs = {
-  "client_install_runner" = {
-    "destination" = "install-nfs_home.sh"
-    "source" = "modules/embedded/modules/file-system/filestore/scripts/install-nfs-client.sh"
-    "type" = "shell"
-  }
-  "fs_type" = "nfs"
-  "local_mount" = "/home"
-  "mount_options" = "defaults,_netdev"
-  "mount_runner" = {
-    "args" = "\"10.224.153.226\" \"/nfsshare\" \"/home\" \"nfs\" \"defaults,_netdev\""
-    "destination" = "mount_home.sh"
-    "source" = "modules/embedded/modules/file-system/filestore/scripts/mount.sh"
-    "type" = "shell"
-  }
-  "remote_mount" = "/nfsshare"
-  "server_ip" = "10.224.153.226"
-}
-subnetwork_name_sysnet = "sys-subnet"
-```
-
-Build the custom image using ml-slurm-a3-1-image.yaml and the same workflow
-as above. Run at the command line:
-
-```shell
-gcluster deploy ml-slurm-a3-1-image.yaml --auto-approve
-```
-
-The image will take approximately 30 minutes to build.
-
-> [!IMPORTANT]
-> You must modify `ml-slurm-a3-2-cluster.yaml` to update the IP address of the
-> Filestore instance for `/home`. Your IP address will differ from that shown
-> below and must match the output from deploying the base blueprint above:
->
-> ```yaml
->   server_ip_homefs: 10.224.153.226
-> ```
-
-Provision the cluster blueprint (approximately 5-10 minutes):
-
-```shell
-gcluster deploy ml-slurm-a3-2-cluster.yaml --auto-approve
+gcluster deploy -d slurm-a3high-deployment.yaml slurm-a3high.yaml --auto-approve
 ```
 
 ## Receive Data Path Manager (RxDM)
