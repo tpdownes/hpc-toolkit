@@ -87,12 +87,107 @@ deployment_groups:
       - 10.3.0.*
       - $(vars.slurm_cluster_name)*
       runners:
+      - type: ansible-local
+        destination: install_tcpx_kernel.yml
+        content: |
+          ---
+          - name: Install TCPx-patched kernel
+            hosts: all
+            become: true
+            tasks:
+            - name: setup apt authentication
+              ansible.builtin.copy:
+                dest: /etc/apt/auth.conf
+                owner: root
+                group: root
+                mode: 0o600
+                content: |
+                  machine https://private-ppa.launchpadcontent.net/canonical-kernel-gcp-tcpx/release/ubuntu
+                  login linux-gcp-tcpx-google
+                  password DLwDV5bCpCPqCRlvg8td
+            - name: Add Ubuntu tcpx apt GPG key
+              ansible.builtin.apt_key:
+                keyserver: keyserver.ubuntu.com
+                id: 3DD6E9491BB719B4
+            - name: Setup tcpx kernel apt repository
+              ansible.builtin.apt_repository:
+                repo: deb https://private-ppa.launchpadcontent.net/canonical-kernel-gcp-tcpx/release/ubuntu {{ ansible_distribution_release }} main
+                state: present
+            - name: Setup tcpx kernel apt source repository
+              ansible.builtin.apt_repository:
+                repo: deb-src https://private-ppa.launchpadcontent.net/canonical-kernel-gcp-tcpx/release/ubuntu {{ ansible_distribution_release }} main
+                state: present
+            - name: Install tcpx kernel
+              ansible.builtin.package:
+                name: linux-gcp-tcpx
+                state: present
+            - name: Freeze tpcx kernel
+              ansible.builtin.dpkg_selections:
+                name: "{{ item }}"
+                selection: hold
+              loop:
+              - linux-image-gcp-tcpx
+              - linux-headers-gcp-tcpx
+            - name: Remove standard kernel
+              ansible.builtin.package:
+                name:
+                - linux-headers-gcp
+                - linux-image-gcp
+                - linux-headers-6*-gcp
+                - linux-image-6*-gcp
+                state: absent
+                force: true
+      - type: ansible-local
+        destination: configure_gpu_monitoring.yml
+        content: |
+          ---
+          - name: Install NVIDIA DCGM and Configure Ops Agent
+            hosts: all
+            become: true
+            vars:
+              distribution: "{{ ansible_distribution | lower }}{{ ansible_distribution_version | replace('.','') }}"
+              cuda_repo_url: https://developer.download.nvidia.com/compute/cuda/repos/{{ distribution }}/x86_64/cuda-keyring_1.1-1_all.deb
+              cuda_repo_filename: /tmp/{{ cuda_repo_url | basename }}
+              enable_nvidia_dcgm: false
+              nvidia_packages:
+              - cuda-toolkit-12-4
+              - nvidia-dkms-550-open
+              - datacenter-gpu-manager
+              - libnvidia-nscq-550
+            tasks:
+            - name: Download NVIDIA repository package
+              ansible.builtin.get_url:
+                url: "{{ cuda_repo_url }}"
+                dest: "{{ cuda_repo_filename }}"
+            - name: Install NVIDIA repository package
+              ansible.builtin.apt:
+                deb: "{{ cuda_repo_filename }}"
+                state: present
+            - name: Install NVIDIA drivers and CUDA
+              ansible.builtin.apt:
+                name: "{{ item }}"
+                update_cache: true
+              loop: "{{ nvidia_packages }}"
+            - name: Freeze NVIDIA drivers and CUDA
+              ansible.builtin.dpkg_selections:
+                name: "{{ item }}"
+                selection: hold
+              loop: "{{ nvidia_packages }}"
+            - name: Force DKMS to run on kernel that isn't running
+              ansible.builtin.shell: |
+                dkms autoinstall -m nvidia
+            post_tasks:
+            - name: Disable NVIDIA DCGM by default (enable during boot on GPU nodes)
+              ansible.builtin.service:
+                name: nvidia-dcgm.service
+                state: stopped
+                enabled: false
       - type: data
         destination: /var/tmp/slurm_vars.json
         content: |
           {
             "reboot": false,
-            "install_cuda": true,
+            "install_cuda": false,
             "install_gcsfuse": true,
             "install_lustre": false,
             "install_ompi": true,
@@ -158,45 +253,6 @@ deployment_groups:
           ENROOT_CACHE_PATH      /mnt/localssd/${UID}/enroot/cache
           ENROOT_DATA_PATH       /mnt/localssd/${UID}/enroot/data
           ENROOT_TEMP_PATH       /mnt/localssd/${UID}/enroot
-      - type: ansible-local
-        destination: configure_gpu_monitoring.yml
-        content: |
-          ---
-          - name: Install NVIDIA DCGM and Configure Ops Agent
-            hosts: all
-            become: true
-            vars:
-              distribution: "{{ ansible_distribution | lower }}{{ ansible_distribution_version | replace('.','') }}"
-              package_url: https://developer.download.nvidia.com/compute/cuda/repos/{{ distribution }}/x86_64/cuda-keyring_1.1-1_all.deb
-              package_filename: /tmp/{{ package_url | basename }}
-              enable_ops_agent: true
-              enable_nvidia_dcgm: false
-            tasks:
-            - name: Download NVIDIA repository package
-              ansible.builtin.get_url:
-                url: "{{ package_url }}"
-                dest: "{{ package_filename }}"
-            - name: Install NVIDIA repository package
-              ansible.builtin.apt:
-                deb: "{{ package_filename }}"
-                state: present
-            - name: Install NVIDIA DCGM
-              ansible.builtin.apt:
-                name:
-                - datacenter-gpu-manager
-                - libnvidia-nscq-550
-                update_cache: true
-            post_tasks:
-            - name: Enable Google Cloud Ops Agent
-              ansible.builtin.service:
-                name: google-cloud-ops-agent.service
-                state: "{{ 'started' if enable_ops_agent else 'stopped' }}"
-                enabled: "{{ enable_ops_agent }}"
-            - name: Disable NVIDIA DCGM by default (enable during boot on GPU nodes)
-              ansible.builtin.service:
-                name: nvidia-dcgm.service
-                state: stopped
-                enabled: false
       - type: shell
         destination: install_mdadm.sh
         content: |
