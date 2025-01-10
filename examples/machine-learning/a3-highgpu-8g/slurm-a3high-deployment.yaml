@@ -1,0 +1,32 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+terraform_backend_defaults:
+  type: gcs
+  configuration:
+    bucket: customer-tf-state-bucket
+
+vars:
+  project_id: ## Set GCP Project ID Here ##
+  deployment_name: slurm-a3high
+  region: ## Set Region Here ##
+  zone: ## Set Zone Here ##
+  a3_static_cluster_size: 32
+  # a3_reservation_name must be specified; if Google staff have provided you
+  # with a reservation name, use it. Otherwise supply user-created reservation.
+  a3_reservation_name: a3-reservation-0
+  # a3_maintenance_interval should be empty string by default; if Google staff
+  # have created a reservation, they will also provide a3_maintenance_interval
+  a3_maintenance_interval: ""
