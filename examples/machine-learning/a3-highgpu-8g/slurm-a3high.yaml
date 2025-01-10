@@ -192,7 +192,6 @@ deployment_groups:
             "install_lustre": false,
             "install_ompi": true,
             "monitoring_agent": "cloud-ops",
-            "slurm_version": "23.11.8",
             "use_open_drivers": true
           }
       - type: shell
