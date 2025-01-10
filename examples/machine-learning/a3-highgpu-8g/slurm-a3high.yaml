@@ -53,9 +53,12 @@ deployment_groups:
     use:
     - sysnet
     settings:
-      filestore_tier: BASIC_SSD
-      size_gb: 2560
+      filestore_tier: HIGH_SCALE_SSD
+      size_gb: 10240
       local_mount: /home
       reserved_ip_range: $(vars.filestore_ip_range)
+      deletion_protection:
+        enabled: true
+        reason: Avoid data loss
     outputs:
     - network_storage
