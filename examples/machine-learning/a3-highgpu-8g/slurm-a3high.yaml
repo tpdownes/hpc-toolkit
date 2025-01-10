@@ -17,7 +17,7 @@ blueprint_name: slurm-a3-base
 terraform_backend_defaults:
   type: gcs
   configuration:
-    bucket: customer-tf-state-bucket
+    bucket: customer-bucket
 
 vars:
   project_id:  ## Set GCP Project ID Here ##
