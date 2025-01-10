@@ -23,7 +23,7 @@ vars:
   deployment_name: slurm-a3high
   region: ## Set Region Here ##
   zone: ## Set Zone Here ##
-  a3_static_cluster_size: 32
+  a3_static_cluster_size: 2
   # a3_reservation_name must be specified; if Google staff have provided you
   # with a reservation name, use it. Otherwise supply user-created reservation.
   a3_reservation_name: a3-reservation-0
